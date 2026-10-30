@@ -792,8 +792,9 @@ h3:first-child{margin-top:0}
       </div>
       <label class="chk"><input type="checkbox" id="useLanduse" checked> Проверять, что сейчас на месте (пашня, лес, застройка). Медленнее, но точнее</label>
       <div class="row"><button class="btn primary" id="run">Анализировать</button><button class="btn" id="stop" disabled>Остановить</button></div>
+      <button class="btn small" id="restart" style="display:none">Начать анализ заново, а не продолжать</button>
       <div class="bar"><div id="prog"></div></div>
-      <div id="log">Нажми «Анализировать». Радиус 100 км разбивается примерно на 35 квадратов, на всё уходит 3–8 минут. Результат сохраняется в браузере, второй раз ждать не придётся.</div>
+      <div id="log">Нажми «Анализировать». Радиус 100 км разбивается примерно на 35 квадратов, на всё уходит 3–8 минут. Прогресс сохраняется после каждого квадрата: если прервётся, продолжишь с того же места.</div>
       <h3>Распознанные генштабовки</h3>
       <div class="note">Скрипт <span class="kbd">ggc_ocr.py</span> читает подписи «нежил.», «ур.», «разв.», «мельн.» на советских картах и находит места, которых нет в OSM. Загрузи сюда его файл <span class="kbd">ggc_points.json</span>.</div>
       <div class="row">
@@ -1370,60 +1371,114 @@ function cellsFor(lat, lon, rKm){
   return cells;
 }
 function log(msg){ $('#log').textContent = msg; }
+// --- не давать экрану гаснуть во время анализа ---
+let wakeLock=null, wantWake=false;
+async function keepAwake(on){
+  wantWake=on;
+  try{
+    if (on && 'wakeLock' in navigator && !wakeLock && document.visibilityState==='visible'){
+      wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{ wakeLock=null; });
+    }
+    if (!on && wakeLock){ await wakeLock.release(); wakeLock=null; }
+  }catch(e){ wakeLock=null; }
+}
+document.addEventListener('visibilitychange',()=>{ if (document.visibilityState==='visible' && wantWake) keepAwake(true); });
+function waitVisible(signal){
+  if (document.visibilityState==='visible') return Promise.resolve();
+  return new Promise((res,rej)=>{ const h=()=>{ if(document.visibilityState==='visible'){ document.removeEventListener('visibilitychange',h); res(); } };
+    document.addEventListener('visibilitychange',h); signal?.addEventListener('abort',()=>{ document.removeEventListener('visibilitychange',h); rej(new DOMException('abort','AbortError')); },{once:true}); });
+}
+// --- сохранение прогресса по квадратам ---
+const ckKey=(p)=>[p.lat,p.lon,p.rKm,p.withLU?1:0].join('|');
+async function loadCheckpoint(){ return await idb.get('analysis_ck'); }
+async function saveCheckpoint(ck){ return await idb.set('analysis_ck', ck); }
+async function clearCheckpoint(){ await idb.set('analysis_ck', null); }
+async function showCheckpointHint(){
+  const ck=await loadCheckpoint();
+  if (ck && ck.done.length<ck.cells.length){
+    const p=ck.params;
+    log(`Есть незаконченный анализ: ${ck.done.length} из ${ck.cells.length} квадратов (центр ${p.lat}, ${p.lon}, радиус ${p.rKm} км). Нажми «Анализировать», чтобы продолжить с того же места.`);
+    $('#prog').style.width=(100*ck.done.length/ck.cells.length)+'%';
+    $('#restart').style.display='';
+    return true;
+  }
+  $('#restart').style.display='none';
+  return false;
+}
+function buildData(ck, partial){
+  return {params:ck.params, ts:Date.now(), partial, cands:ck.cands,
+    ctx:{settl:ck.settl, spring:ck.spring, ford:ck.ford, arch:ck.arch}};
+}
 async function runAnalysis(){
   const lat=+$('#cLat').value, lon=+$('#cLon').value, rKm=Math.max(1,Math.min(250,+$('#radius').value||100));
-  const withLU=$('#useLanduse').checked;
-  const cells=cellsFor(lat,lon,rKm);
+  const withLU=$('#useLanduse').checked, params={lat,lon,rKm,withLU};
+  let ck=await loadCheckpoint();
+  let resumed=false;
+  if (ck && ckKey(ck.params)===ckKey(params) && ck.done.length<ck.cells.length) resumed=true;
+  else ck={params, cells:cellsFor(lat,lon,rKm), done:[], cands:[], settl:[], spring:[], ford:[], arch:[], started:Date.now()};
+  const cells=ck.cells, doneSet=new Set(ck.done);
+  const candMap=new Map(ck.cands.map(c=>[c.id,c]));
+  const ctx={settl:new Map(ck.settl.map(p=>[p.id,p])), spring:new Map(ck.spring.map(p=>[p.id,p])), ford:new Map(ck.ford.map(p=>[p.id,p])), arch:new Map(ck.arch.map(p=>[p.id,p]))};
   abortCtl=new AbortController();
-  $('#run').disabled=true; $('#stop').disabled=false;
-  const candMap=new Map(), ctx={settl:new Map(), spring:new Map(), ford:new Map(), arch:new Map()};
-  let done=0, failed=0;
-  const queue=cells.map((c,i)=>i);
-  const t0=Date.now();
-  async function worker(wi){
-    while(queue.length){
-      const i=queue.shift(); const [s,w,n,e]=cells[i];
-      try{
-        const j=await overpass(cellQuery(s,w,n,e,withLU), abortCtl.signal, wi);
-        const els=j.elements||[];
-        const localC=[];
-        for (const el of els){
-          if (el.geometry) continue;
-          const t=el.tags||{}; const la=el.lat ?? el.center?.lat, lo=el.lon ?? el.center?.lon;
-          if (la==null) continue;
-          const id=el.type[0]+el.id;
-          if (dist(lat,lon,la,lo) > rKm*1000+3000) continue;
-          const kind=classify(t);
-          if (kind==='arch'){ ctx.arch.set(id,{lat:la,lon:lo,name:t.name||''}); continue; }
-          if (kind){
-            if (!candMap.has(id)){ const c={id, lat:+la.toFixed(6), lon:+lo.toFixed(6), kind, tags:pickTags(t)}; candMap.set(id,c); localC.push(c); }
-            continue;
-          }
-          if (isLiveSettlement(t)) ctx.settl.set(id,{lat:la,lon:lo,name:t.name||'',big:/^(city|town)$/.test(t.place)});
-          else if (t.natural==='spring') ctx.spring.set(id,{lat:la,lon:lo});
-          else if (t.ford==='yes'||t.highway==='ford') ctx.ford.set(id,{lat:la,lon:lo});
-        }
-        if (withLU) classifyLanduse(localC, polysFromElements(els));
-      }catch(err){
-        if (abortCtl.signal.aborted) return;
-        failed++; console.warn('cell failed', cells[i], err);
-      }
-      done++;
-      $('#prog').style.width=(100*done/cells.length)+'%';
-      const el=(Date.now()-t0)/1000, eta=done? Math.round(el/done*(cells.length-done)) : 0;
-      log(`Квадрат ${done} из ${cells.length} · найдено мест: ${candMap.size} · деревень вокруг: ${ctx.settl.size}`+(failed?` · ошибок: ${failed}`:'')+(done<cells.length?` · осталось ~${Math.max(1,Math.round(eta/60))} мин`:''));
+  $('#run').disabled=true; $('#stop').disabled=false; $('#restart').style.display='none';
+  keepAwake(true);
+  const t0=Date.now(), startDone=doneSet.size;
+  let failed=new Set(), saving=Promise.resolve();
+  const snapshot=()=>{ ck.done=[...doneSet]; ck.cands=[...candMap.values()];
+    ck.settl=[...ctx.settl.values()]; ck.spring=[...ctx.spring.values()]; ck.ford=[...ctx.ford.values()]; ck.arch=[...ctx.arch.values()]; return ck; };
+  const progress=()=>{
+    const d=doneSet.size, n=cells.length, el=(Date.now()-t0)/1000, rate=(d-startDone)/Math.max(el,1), eta=rate>0?(n-d)/rate:0;
+    $('#prog').style.width=(100*d/n)+'%';
+    log((resumed?'Продолжаю. ':'')+`Квадрат ${d} из ${n} · найдено мест: ${candMap.size} · деревень вокруг: ${ctx.settl.size}`+
+      (failed.size?` · не загрузилось: ${failed.size} (повторю)`:'')+(d<n&&eta?` · осталось ~${Math.max(1,Math.round(eta/60))} мин`:'')+
+      (wakeLock?' · экран не погаснет':' · не выключай экран и не сворачивай браузер'));
+  };
+  progress();
+  async function doCell(i, wi){
+    const [s,w,n,e]=cells[i];
+    await waitVisible(abortCtl.signal);
+    const j=await overpass(cellQuery(s,w,n,e,withLU), abortCtl.signal, wi);
+    const els=j.elements||[], localC=[];
+    for (const el of els){
+      if (el.geometry) continue;
+      const t=el.tags||{}; const la=el.lat ?? el.center?.lat, lo=el.lon ?? el.center?.lon;
+      if (la==null) continue;
+      const id=el.type[0]+el.id;
+      if (dist(lat,lon,la,lo) > rKm*1000+3000) continue;
+      const kind=classify(t);
+      if (kind==='arch'){ ctx.arch.set(id,{id,lat:la,lon:lo,name:t.name||''}); continue; }
+      if (kind){ if (!candMap.has(id)){ const c={id, lat:+la.toFixed(6), lon:+lo.toFixed(6), kind, tags:pickTags(t)}; candMap.set(id,c); localC.push(c); } continue; }
+      if (isLiveSettlement(t)) ctx.settl.set(id,{id,lat:la,lon:lo,name:t.name||'',big:/^(city|town)$/.test(t.place)});
+      else if (t.natural==='spring') ctx.spring.set(id,{id,lat:la,lon:lo});
+      else if (t.ford==='yes'||t.highway==='ford') ctx.ford.set(id,{id,lat:la,lon:lo});
     }
+    if (withLU) classifyLanduse(localC, polysFromElements(els));
+    doneSet.add(i); failed.delete(i);
+    saving=saving.then(()=>saveCheckpoint(snapshot()));
   }
-  await Promise.all([worker(0), worker(1)]);
-  $('#run').disabled=false; $('#stop').disabled=true;
-  if (abortCtl.signal.aborted && done===0){ log('Остановлено.'); return; }
-  DATA={params:{lat,lon,rKm,withLU}, ts:Date.now(), partial: abortCtl.signal.aborted || failed>0,
-    cands:[...candMap.values()], ctx:{settl:[...ctx.settl.values()], spring:[...ctx.spring.values()], ford:[...ctx.ford.values()], arch:[...ctx.arch.values()]}};
+  async function pass(list){
+    const queue=list.slice();
+    const worker=async wi=>{ while(queue.length && !abortCtl.signal.aborted){ const i=queue.shift();
+      try{ await doCell(i,wi); }catch(err){ if (abortCtl.signal.aborted) return; failed.add(i); console.warn('cell failed', cells[i], err); }
+      progress(); } };
+    await Promise.all([worker(0), worker(1)]);
+  }
+  try{
+    await pass(cells.map((_,i)=>i).filter(i=>!doneSet.has(i)));
+    for (let r=0; r<2 && failed.size && !abortCtl.signal.aborted; r++){ log(`Повторяю незагрузившиеся квадраты (${failed.size})…`); await sleep(5000, abortCtl.signal).catch(()=>{}); await pass([...failed]); }
+  } finally {
+    await saving; keepAwake(false);
+    $('#run').disabled=false; $('#stop').disabled=true;
+  }
+  const complete = doneSet.size===cells.length;
+  if (!doneSet.size){ log('Остановлено. Ничего не успело загрузиться.'); await clearCheckpoint(); return; }
+  DATA=buildData(snapshot(), !complete);
   const saved=await idb.set('analysis', DATA); try{ localStorage.removeItem('mdk_analysis_v1'); }catch(e){}
+  if (complete) await clearCheckpoint(); else await saveCheckpoint(snapshot());
   refresh();
-  log(`Готово: ${candMap.size} мест, ${SCORED.filter(p=>p.score>=60).length} с рейтингом 60+. `+
-      (failed?`Не загрузилось квадратов: ${failed} (сервер перегружен). Запусти анализ ещё раз позже, чтобы добрать. `:'')+
-      (saved?'Результат сохранён в браузере.':'Сохранить в браузере не вышло: слишком много данных.'));
+  if (complete) log(`Готово: ${candMap.size} мест, ${SCORED.filter(p=>p.score>=60).length} с рейтингом 60+. `+(saved?'Результат сохранён в браузере.':'Сохранить в браузере не вышло.'));
+  else { log(`Загружено ${doneSet.size} из ${cells.length} квадратов, найдено ${candMap.size} мест. Точки уже на карте. `+
+    (abortCtl.signal.aborted?'Остановлено. ':'Часть квадратов сервер не отдал. ')+'Нажми «Анализировать» ещё раз — продолжу с недостающих квадратов.'); $('#restart').style.display=''; }
   switchTab('points');
 }
 
@@ -1911,6 +1966,7 @@ $('#marksList').addEventListener('click',e=>{ const it=e.target.closest('.item')
 $('#useView').onclick=()=>{ const c=map.getCenter(); $('#cLat').value=c.lat.toFixed(4); $('#cLon').value=c.lng.toFixed(4); updateCircle(); };
 $('#run').onclick=()=>runAnalysis().catch(e=>{ log('Ошибка: '+e.message); $('#run').disabled=false; $('#stop').disabled=true; });
 $('#stop').onclick=()=>abortCtl?.abort();
+$('#restart').onclick=async()=>{ await clearCheckpoint(); $('#restart').style.display='none'; $('#prog').style.width='0'; runAnalysis().catch(e=>{ log('Ошибка: '+e.message); $('#run').disabled=false; $('#stop').disabled=true; keepAwake(false); }); };
 $('#base').onchange=e=>setBase(e.target.value);
 $('#overlay').onchange=e=>setOverlay(e.target.value);
 $('#customApply').onclick=()=>setOverlay('custom');
@@ -2150,7 +2206,7 @@ updateCircle(); refresh(); projInfo();
   else if (DATA && !a){ if (await idb.set('analysis',DATA)) try{ localStorage.removeItem('mdk_analysis_v1'); }catch(e){} }
   const o=await idb.get('ocr'); if (o&&o.points) OCR=o;
   const j=await idb.get('journal'); if (Array.isArray(j)) JOURNAL=j;
-  showDataLog(); refresh(); renderJournal(); ocrInfo();
+  showDataLog(); refresh(); renderJournal(); ocrInfo(); await showCheckpointHint();
   if (DATA || MARKS.length || OCR.points.length) switchTab('points');
   ocrLanduse();
 })();
