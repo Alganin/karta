@@ -1,28 +1,5 @@
 {
- "updated": "2026-11-01 17:23",
- "totalMB": 0.0,
- "maps": [
-  {
-   "id": "proverka",
-   "title": "Проверка (тестовый слой, будет удалён)",
-   "year": "2026",
-   "url": "tiles/proverka/{z}/{x}/{y}.webp",
-   "minzoom": 8,
-   "maxzoom": 13,
-   "bounds": [
-    [
-     56.25002,
-     43.9
-    ],
-    [
-     56.4,
-     44.10006
-    ]
-   ],
-   "sheets": 1,
-   "sizeMB": 0.0,
-   "built": "2026-11-01 17:23",
-   "hash": "7f9bbfb1bebc051f"
-  }
- ]
+ "updated": "2026-11-01 17:32",
+ "totalMB": 0,
+ "maps": []
 }
