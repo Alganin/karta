@@ -7,3 +7,10 @@ ggc_result/
 ggc_cache/
 *.jpg
 *.png
+
+# Общие старые карты и их тайлы — публикуются намеренно
+!maps-src/
+!maps-src/**
+!tiles/
+!tiles/**
+!maps.json
