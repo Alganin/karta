@@ -23,6 +23,12 @@
 Подробнее (1:50 000, мелкие деревни, но в ~4 раза дольше) — лучше на меньшем радиусе:
   python ggc_ocr.py --lat 56.10 --lon 43.50 --radius 30 --layer ggc500
 
+Свои сканы старых карт (Менде, Шуберт, ПГМ) с привязкой OziExplorer (.map рядом с картинкой):
+  python ggc_ocr.py --scan менде_лист5.jpg --scan менде_лист6.jpg
+Ищутся названия деревень и пометки «кабакъ», «корчма», «почт. ст.», «перевозъ», «ярмарка»,
+«пуст.» (пустошь), «часовня», «церк.», «мельн.». Дореформенная орфография учитывается.
+Карта сама сравнит названия с нынешними деревнями и урочищами.
+
 Скачанные тайлы и распознанные куски кэшируются в папке ggc_cache —
 прерванный запуск можно продолжить той же командой.
 """
@@ -32,6 +38,7 @@ try:
     import requests
     import numpy as np
     from PIL import Image, ImageOps
+    Image.MAX_IMAGE_PIXELS = None
     import pytesseract
 except ImportError as e:
     print("Не хватает библиотеки:", e.name)
@@ -122,6 +129,8 @@ LAT2CYR = str.maketrans({"a": "а", "e": "е", "o": "о", "p": "р", "c": "с", 
 
 def norm(w):
     w = w.lower().translate(LAT2CYR)
+    w = w.replace("ѣ", "е").replace("і", "и").replace("ѳ", "ф").replace("ѵ", "и")
+    w = re.sub(r"ъ(?=[\.\s]|$)", "", w)
     return re.sub(r"[^а-яё\.]", "", w)
 
 KEYS = [
@@ -135,6 +144,16 @@ KEYS = [
     ("g_cem",      "кладб", 0.8, "кладб."),
 ]
 
+KEYS_OLD = KEYS + [
+    ("g_inn", "кабак", 0.8, "кабак"), ("g_inn", "корчм", 0.8, "корчма"), ("g_inn", "трактир", 0.8, "трактир"),
+    ("g_inn", "постоял", 0.8, "постоялый двор"), ("g_inn", "питейн", 0.8, "питейный дом"),
+    ("g_post", "почтов", 0.8, "почтовая станция"), ("g_post", "почт", 0.95, "почт. ст."),
+    ("g_perevoz", "перевоз", 0.8, "перевоз"), ("g_fair", "ярмар", 0.8, "ярмарка"),
+    ("g_pustosh", "пустош", 0.8, "пустошь"), ("g_pustosh", "пуст", 0.95, "пуст."),
+    ("g_chapel", "часовн", 0.8, "часовня"), ("g_church", "церк", 0.9, "церковь"),
+]
+ACTIVE_KEYS = KEYS
+
 def match_key(raw):
     w = norm(raw).strip(".")
     if not w:
@@ -144,7 +163,7 @@ def match_key(raw):
     if len(w) < 4:
         return None
     best = None
-    for kind, pat, thr, lbl in KEYS:
+    for kind, pat, thr, lbl in ACTIVE_KEYS:
         # окно по слову: OCR часто приклеивает скобку как «г», «з», «{»
         r = max(difflib.SequenceMatcher(None, w[i:i + len(pat)], pat).ratio()
                 for i in range(0, max(1, min(3, len(w) - len(pat) + 2))))
@@ -162,8 +181,25 @@ def text_mask(img, scale=2):
         g = g.resize((g.width * scale, g.height * scale), Image.LANCZOS)
     return g.point(lambda v: 0 if v < 135 else 255)
 
-def ocr_words(img, scale=2):
-    m = text_mask(img, scale)
+def otsu_mask(img, scale=1):
+    g = img.convert("L")
+    if scale != 1:
+        g = g.resize((int(g.width * scale), int(g.height * scale)), Image.LANCZOS)
+    a = np.asarray(g)
+    hist = np.bincount(a.ravel(), minlength=256).astype(float)
+    total = a.size; sum_all = (np.arange(256) * hist).sum()
+    wb = sb = 0.0; best_t, best_v = 128, -1
+    for t in range(256):
+        wb += hist[t]
+        if wb == 0 or wb == total: continue
+        sb += t * hist[t]
+        mb, mf = sb / wb, (sum_all - sb) / (total - wb)
+        v = wb * (total - wb) * (mb - mf) ** 2
+        if v > best_v: best_v, best_t = v, t
+    return g.point(lambda v: 0 if v < best_t * 0.92 else 255)
+
+def ocr_words(img, scale=2, mask="color"):
+    m = text_mask(img, scale) if mask == "color" else otsu_mask(img, scale)
     d = pytesseract.image_to_data(m, lang="rus", config="--oem 1 --psm 11", output_type=pytesseract.Output.DICT)
     words = []
     for i, t in enumerate(d["text"]):
@@ -186,6 +222,25 @@ def line_text(words, line):
     ws = sorted([w for w in words if w["line"] == line], key=lambda w: w["n"])
     return " ".join(w["t"] for w in ws)
 
+NAME_RE = re.compile(r"^[А-ЯЁ][а-яёѣіъ]{3,}[.,]?$")
+
+def old_names(words):
+    """Названия деревень на старой карте: слова с заглавной буквы (рядом стоящие склеиваются)."""
+    out, used = [], set()
+    for w in words:
+        if id(w) in used or w["conf"] < 60 or not NAME_RE.match(w["t"]): continue
+        if match_key(w["t"]): continue
+        line = sorted([v for v in words if v["line"] == w["line"] and NAME_RE.match(v["t"]) and v["conf"] >= 50], key=lambda v: v["n"])
+        grp = [w]
+        for v in line:
+            if v["n"] == grp[-1]["n"] + 1: grp.append(v)
+        for v in grp: used.add(id(v))
+        name = re.sub(r"тъ(?=[а-я])", "е", " ".join(v["t"].strip(".,") for v in grp))
+        out.append({"kind": "m_name", "label": "название", "name": name, "text": name, "conf": min(v["conf"] for v in grp),
+                    "bx": min(v["x"] for v in grp), "by": min(v["y"] for v in grp),
+                    "bx2": max(v["x"] + v["w"] for v in grp), "by2": max(v["y"] + v["h"] for v in grp)})
+    return out
+
 def find_labels(words):
     found = []
     for w in words:
@@ -207,11 +262,17 @@ def find_labels(words):
                      and abs((v["x"] + v["w"] / 2) - cx) < max(w["w"], v["w"]) * 0.9
                      and re.match(r"^[А-ЯЁA-Z]", v["t"])]
             same = [v for v in words if v["line"] == w["line"] and v["n"] < w["n"] and re.match(r"^[А-ЯЁA-Z]", v["t"])]
+            hh = max(w["h"], 8)
+            after = sorted([v for v in words if v is not w and re.match(r"^[А-ЯЁA-Z]", v["t"]) and abs((v["y"] + v["h"]) - (w["y"] + w["h"])) < 0.7 * hh
+                            and 0 <= v["x"] - (w["x"] + w["w"]) < 2.5 * hh], key=lambda v: v["x"])
             if above:
                 v = min(above, key=lambda v: w["y"] - v["y"])
                 name, anchor = line_text(words, v["line"]), v
             elif same:
                 name = " ".join(v["t"] for v in sorted(same, key=lambda v: v["n"]))
+            elif after:
+                name, anchor = after[0]["t"], after[0]
+        name = re.sub(r"тъ(?=[а-я])", "е", name)      # «ѣ» часто читается как «тъ»
         found.append({"kind": kind, "label": lbl, "name": re.sub(r"\s+", " ", name).strip(" .,()"),
                       "text": w["t"], "conf": w["conf"],
                       "bx": min(w["x"], anchor["x"]), "by": min(w["y"], anchor["y"]),
@@ -219,11 +280,98 @@ def find_labels(words):
                       "by2": max(w["y"] + w["h"], anchor["y"] + anchor["h"])})
     return found
 
+# ---------------------------------------------------------------- свои сканы
+def read_ozi(path):
+    txt = open(path, "r", encoding="cp1251", errors="replace").read().splitlines()
+    xy, ll, pts = {}, {}, []
+    for l in txt:
+        m = re.match(r"^MMPXY\s*,\s*(\d+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)", l)
+        if m: xy[m.group(1)] = (float(m.group(2)), float(m.group(3)))
+        m = re.match(r"^MMPLL\s*,\s*(\d+)\s*,\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)", l)
+        if m: ll[m.group(1)] = (float(m.group(3)), float(m.group(2)))      # lat, lon
+        if re.match(r"^Point\d+", l):
+            f = [s.strip() for s in l.split(",")]
+            try:
+                x, y = float(f[2]), float(f[3]); lat = float(f[6]) + float(f[7] or 0) / 60; lon = float(f[9]) + float(f[10] or 0) / 60
+                if f[8] == "S": lat = -lat
+                if f[11] == "W": lon = -lon
+                pts.append((x, y, lat, lon))
+            except (ValueError, IndexError):
+                pass
+    if len(pts) < 3:
+        pts = [(xy[k][0], xy[k][1], ll[k][0], ll[k][1]) for k in xy if k in ll]
+    if len(pts) < 3:
+        return None
+    P = np.array([[p[0], p[1], 1.0] for p in pts]); LA = np.array([p[2] for p in pts]); LO = np.array([p[3] for p in pts])
+    if len(pts) >= 4:   # проективное преобразование (DLT, наименьшие квадраты)
+        A, b = [], []
+        for (x, y, la, lo) in pts:
+            A.append([x, y, 1, 0, 0, 0, -x * lo, -y * lo]); b.append(lo)
+            A.append([0, 0, 0, x, y, 1, -x * la, -y * la]); b.append(la)
+        h = np.linalg.lstsq(np.array(A), np.array(b), rcond=None)[0]
+        return lambda x, y: ((h[3] * x + h[4] * y + h[5]) / (h[6] * x + h[7] * y + 1), (h[0] * x + h[1] * y + h[2]) / (h[6] * x + h[7] * y + 1))
+    ca = np.linalg.lstsq(P, LA, rcond=None)[0]; co = np.linalg.lstsq(P, LO, rcond=None)[0]
+    return lambda x, y: (ca[0] * x + ca[1] * y + ca[2], co[0] * x + co[1] * y + co[2])
+
+def run_scans(a):
+    global ACTIVE_KEYS
+    ACTIVE_KEYS = KEYS_OLD
+    os.makedirs(a.out, exist_ok=True)
+    allp = []
+    for img_path in a.scan:
+        base = os.path.splitext(img_path)[0]
+        mp = next((base + e for e in (".map", ".MAP") if os.path.exists(base + e)), None)
+        if not mp:
+            print("Нет файла привязки .map рядом с", img_path, "— пропускаю."); continue
+        f = read_ozi(mp)
+        if not f:
+            print("Не удалось прочитать привязку", mp); continue
+        im = Image.open(img_path).convert("RGB")
+        W, H = im.size; B, O = 2200, 250
+        blocks = [(x, y) for y in range(0, H, B - O) for x in range(0, W, B - O)]
+        print(f"{os.path.basename(img_path)}: {W}×{H}, кусков {len(blocks)}")
+        found = []
+        def do(bxy):
+            x0, y0 = bxy
+            tile = im.crop((x0, y0, min(W, x0 + B), min(H, y0 + B)))
+            ws = ocr_words(tile, a.scale, mask="otsu")
+            res = []
+            for L in find_labels(ws) + old_names(ws):
+                cx, cy = x0 + (L["bx"] + L["bx2"]) / 2, y0 + (L["by"] + L["by2"]) / 2
+                lat, lon = f(cx, cy)
+                pad = 50
+                crop = im.crop((max(0, int(x0 + L["bx"] - pad)), max(0, int(y0 + L["by"] - pad)), min(W, int(x0 + L["bx2"] + pad)), min(H, int(y0 + L["by2"] + pad))))
+                crop.thumbnail((260, 160)); buf = io.BytesIO(); crop.save(buf, "JPEG", quality=72)
+                res.append({"lat": round(float(lat), 6), "lon": round(float(lon), 6), "kind": L["kind"], "label": L["label"], "name": L["name"],
+                            "text": L["text"], "conf": round(L["conf"], 1), "crop": "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()})
+            return res
+        t0 = time.time()
+        with cf.ThreadPoolExecutor(max_workers=max(1, (os.cpu_count() or 2) - 1)) as ex:
+            for i, r in enumerate(ex.map(do, blocks), 1):
+                found.extend(r); print(f"\r  {i}/{len(blocks)}, найдено {len(found)}, осталось ~{(time.time()-t0)/i*(len(blocks)-i)/60:.0f} мин   ", end="", flush=True)
+        print()
+        allp.extend(found)
+    pts = []
+    allp.sort(key=lambda p: -p["conf"])
+    for p in allp:
+        if any(q["kind"] == p["kind"] and q["name"] == p["name"] and haversine(p["lat"], p["lon"], q["lat"], q["lon"]) < 300 for q in pts): continue
+        pts.append(p)
+    out = {"format": "poisk-ggc-ocr", "version": 1, "layer": "scan", "created": time.strftime("%Y-%m-%d %H:%M"), "points": pts}
+    jp = os.path.join(a.out, "scan_points.json")
+    json.dump(out, open(jp, "w", encoding="utf-8"), ensure_ascii=False)
+    by = {}
+    for p in pts: by[p["label"]] = by.get(p["label"], 0) + 1
+    print("Готово:", ", ".join(f"{k}: {v}" for k, v in sorted(by.items(), key=lambda x: -x[1])) or "ничего не найдено")
+    print("Файл для карты:", os.path.abspath(jp))
+    print("Открой карту → «Анализ» → «Загрузить результаты распознавания».")
+
 # ---------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser(description="Поиск «нежил.», «ур.», «разв.», «мельн.» на генштабовках")
-    ap.add_argument("--lat", type=float, required=True)
-    ap.add_argument("--lon", type=float, required=True)
+    ap.add_argument("--lat", type=float)
+    ap.add_argument("--lon", type=float)
+    ap.add_argument("--scan", action="append", help="свой скан старой карты (рядом .map OziExplorer); можно несколько")
+    ap.add_argument("--scale", type=float, default=1.0, help="увеличение скана перед распознаванием (для --scan)")
     ap.add_argument("--radius", type=float, default=30, help="радиус, км (по умолчанию 30)")
     ap.add_argument("--layer", default="ggc1000", help="ggc1000 (1:100 000, по умолчанию), ggc500 (1:50 000), ggc2000")
     ap.add_argument("--zoom", type=int, default=None, help="уровень тайлов (по умолчанию родной для слоя)")
@@ -255,6 +403,10 @@ def main():
         print("В Tesseract нет русского языка (rus). Переустанови с отмеченным Russian или положи rus.traineddata в папку tessdata.")
         sys.exit(1)
 
+    if a.scan:
+        run_scans(a); return
+    if a.lat is None or a.lon is None:
+        print("Укажи --lat и --lon (генштабовка) или --scan файл.jpg (свой скан)."); sys.exit(1)
     z = a.zoom or LAYERS.get(a.layer, (13, ""))[0]
     tiles = tiles_in_circle(a.lat, a.lon, a.radius, z)
     print(f"Слой {a.layer}, зум {z}: {len(tiles)} тайлов в круге {a.radius} км.")

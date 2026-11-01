@@ -802,6 +802,14 @@ h3:first-child{margin-top:0}
         <button class="btn small" id="ocrClear" style="flex:0 0 auto">Очистить</button>
       </div>
       <div id="ocrInfo" class="note"></div>
+      <h3>Списки населённых мест (1859 г.)</h3>
+      <div class="note">Таблица деревень с числом дворов и заведениями (церковь, ярмарка, кабак, почтовая станция, мельница, перевоз). Крупные сёла с ярмарками и кабаками получают до +25, их окраины тоже. Названия сопоставляются с урочищами и деревнями; одинаковые названия в районе пропускаются, если в таблице нет координат.</div>
+      <div class="row">
+        <label class="btn small" style="text-align:center">Загрузить таблицу (CSV)<input type="file" id="snmFile" accept=".csv,.tsv,.txt" hidden></label>
+        <button class="btn small" id="snmTpl" style="flex:0 0 auto">Шаблон</button>
+        <button class="btn small" id="snmClear" style="flex:0 0 auto">Очистить</button>
+      </div>
+      <div id="snmInfo" class="note"></div>
       <h3>Проект: копия и перенос</h3>
       <div class="note">Всё (анализ, отметки, журнал, распознавание, привязки сканов) хранится только в этом браузере. Файл проекта — это резервная копия и способ перенести всё на телефон или другой компьютер.</div>
       <div class="row">
@@ -860,7 +868,9 @@ h3:first-child{margin-top:0}
         <option value="topo1000">Топокарта 1:100 000 (другое издание)</option>
         <option value="soviet">Советская топокарта (AtloMaps)</option>
         <option value="custom">Свой URL тайлов…</option>
+        <optgroup id="sharedGroup" label="Общие старые карты"></optgroup>
       </select>
+      <div id="sharedInfo" class="note"></div>
       <div id="customBox" style="display:none">
         <input type="text" id="customUrl" placeholder="https://…/{z}/{x}/{y}.png">
         <label class="chk"><input type="checkbox" id="customTms"> Ось Y перевёрнута (TMS)</label>
@@ -878,6 +888,7 @@ h3:first-child{margin-top:0}
         <button class="btn small" id="scanRemove" disabled>Убрать</button>
       </div>
       <div id="scanStatus" class="note"></div>
+      <div id="myScans" class="list"></div>
       <div id="gcpBox" style="display:none">
         <h3>Точная привязка по точкам</h3>
         <div class="note">Совмести 8–15 одинаковых объектов по всему листу: церкви, мосты, слияния рек, перекрёстки старых дорог. Первый клик ставишь на объект на скане, второй — на то же место на современной карте (скан на это время станет прозрачным). Чем больше точек, тем ровнее ляжет карта.</div>
@@ -897,6 +908,11 @@ h3:first-child{margin-top:0}
       <p class="note">Отмечай места, которые видишь на старой карте, но которых нет сейчас: деревни, корчмы, мельницы, ярмарки, броды. Отметки получают рейтинг по тем же правилам и попадают в общий список и экспорт.</p>
       <button class="btn primary full" id="addMark">＋ Поставить отметку на карте</button>
       <div class="note">Отметки сохраняются в файл вместе со всем проектом: вкладка «Анализ» → «Сохранить проект в файл».</div>
+      <h3>Старые дороги и тракты</h3>
+      <div class="note">Проведи по старой карте линию тракта или большака: кликами по точкам, потом «Закончить». Места до 300 м от тракта получают +6, перекрёстки двух трактов +10.</div>
+      <div class="row"><button class="btn small primary" id="roadDraw">Нарисовать дорогу</button><button class="btn small" id="roadCancel" style="display:none">Отмена</button></div>
+      <input type="text" id="roadName" placeholder="Название (например, Арзамасский тракт)" style="display:none;margin-top:6px">
+      <div id="roadsList" class="list"></div>
       <div class="list" id="marksList"></div>
     </section>
 
@@ -956,6 +972,14 @@ h3:first-child{margin-top:0}
       <p>Звёздочка ☆ в окне точки добавляет её в избранное (на карте она обводится золотым). Там же поле «Моё описание»: подъезд, хозяин поля, когда пахали, что уже нашёл. Всё собрано во вкладке «Моё», ищется через поиск по названию и попадает в GPX. Видно только тебе: данные хранятся в твоём браузере и в твоём файле проекта.</p>
       <h3>Журнал и ложные пометки</h3>
       <p>«Записать выезд» в окне точки сохраняет дату, результат, находки, век и фото. Результат сразу становится статусом точки и идёт в подстройку рейтинга. У найденных распознаванием пометок есть кнопка «ложная пометка»: точка или подтверждение генштабом скрывается, вернуть можно во вкладке «Точки».</p>
+      <h3>Общие старые карты</h3>
+      <p>Карты из папки <a href="https://github.com/Alganin/karta/tree/main/maps-src" target="_blank" rel="noopener">maps-src</a> на GitHub нарезаются автоматически и появляются у всех в списке «Старая карта поверх» → «Общие старые карты». Кладёшь лист и файл привязки .map/.kml с тем же именем; листы одной папки склеиваются в один слой. Подробности — в README этой папки.</p>
+      <h3>Окраины старых сёл</h3>
+      <p>Для живых деревень с несоветским названием программа ищет пашню и луг в 150–300 м от края застройки и ставит до трёх точек «Окраина: …». Признаки старого села: храм (+8), название на старой карте (+8), запись в списке 1859 г. (до +25).</p>
+      <h3>Тракты, дороги, поляны</h3>
+      <p>Нарисованные тракты (вкладка «Отметки»): до 300 м +6, перекрёсток +10. Полевая дорога из OSM к месту +4. Дальше 1,2 км от проезжих дорог +5, у самой дороги −3. Луг посреди леса («поляна») +8.</p>
+      <h3>Распознавание своих сканов</h3>
+      <p><span class="kbd">python ggc_ocr.py --scan лист.jpg</span> (рядом лист.map) ищет на Менде, Шуберте, ПГМ названия деревень и пометки «кабакъ», «корчма», «почт. ст.», «перевозъ», «ярмарка», «пуст.», «часовня», «церк.». Название, совпавшее с живой деревней, делает её «старым селом»; совпавшее с урочищем — подтверждает его (+12); без совпадений — новая точка «деревня, которой нет».</p>
       <h3>Ограничения</h3>
       <p>Качество зависит от того, насколько подробно размечен OSM в конкретном районе. Скан XIX века программа не читает: подписи там рукописные, автоматическое распознавание ошибается. Поэтому сверка со сканом делается глазами, а отметки ставятся вручную.</p>
       <p>Данные: © участники OpenStreetMap (ODbL), тайлы: nakarte.me, Esri, OpenTopoMap.</p>
@@ -1043,12 +1067,22 @@ const TYPES = {
   g_ur:{label:'Генштаб: урочище', base:32},
   g_ruins:{label:'Генштаб: развалины', base:28},
   g_mill:{label:'Генштаб: мельница', base:32},
-  g_cem:{label:'Генштаб: кладбище', base:22}
+  g_cem:{label:'Генштаб: кладбище', base:22},
+  outskirt:{label:'Окраина старого села', base:28},
+  m_name:{label:'Старая карта: деревня, которой нет', base:35},
+  g_inn:{label:'Старая карта: кабак / корчма / двор', base:45},
+  g_post:{label:'Старая карта: почтовая станция', base:45},
+  g_perevoz:{label:'Старая карта: перевоз', base:35},
+  g_fair:{label:'Старая карта: ярмарка', base:50},
+  g_pustosh:{label:'Старая карта: пустошь', base:45},
+  g_chapel:{label:'Старая карта: часовня', base:30},
+  g_church:{label:'Старая карта: церковь', base:38}
 };
 const MARK_TYPES = {
   village:['Деревня',45], selo:['Село с церковью',55], manor:['Усадьба',50], inn:['Постоялый двор / кабак',50],
   fair:['Ярмарка / торг',55], mill:['Мельница',40], khutor:['Хутор / выселки',35], ford:['Брод / переправа',35],
-  road:['Перекрёсток старых дорог',30], other:['Другое',30]
+  road:['Перекрёсток старых дорог',30], post:['Почтовая станция / ям',50], perevoz:['Перевоз',40],
+  chapel:['Часовня',35], pustosh:['Пустошь (бывшая деревня)',50], other:['Другое',30]
 };
 const ERA_BONUS = {pgm:[12,'ПГМ ~1790'], mende:[10,'Менде/Шуберт ~1850'], rkka:[5,'РККА 1940-е'], ggc:[0,'Генштаб 1980-е']};
 
@@ -1134,6 +1168,11 @@ function classifyLanduse(points, polys){
     }
     if (best) p.lu = best.key;
     else if (p.lu === undefined) p.lu = null;
+    if (p.lu && /^(meadow|grassland|scrub|heath)$/.test(p.lu)){
+      const near=polys.some(g=>(g.key==='forest'||g.key==='wood') && p.lat>g.bb[0]-0.0015 && p.lat<g.bb[2]+0.0015 && p.lon>g.bb[1]-0.0025 && p.lon<g.bb[3]+0.0025 &&
+        (pip(p.lat,p.lon,g.ring) || g.ring.some(v=>Math.abs(v[0]-p.lat)<0.0013 && Math.abs(v[1]-p.lon)<0.0023 && dist(p.lat,p.lon,v[0],v[1])<150)));
+      if (near) p.glade=true;
+    }
   }
 }
 function polysFromElements(els){
@@ -1148,6 +1187,47 @@ function polysFromElements(els){
     out.push({key:k, ring, area:ringArea(ring), bb});
   }
   return out;
+}
+
+// ---------- окраины старых сёл, дороги ----------
+const SOVIET_NAME=/(октябр|красн|ленин|совет|первомай|комсомол|пролетар|ильич|мичурин|маяк|коммун|побед|заря|восход|новая жизнь|свобод|имени|им\.|посёлок|поселок|торф|лесоучаст|станци|разъезд|кордон|дорожн|опытн|гигант|труд|рабоч|дачн|снт|сосновый бор|юбилейн|молодёжн|молодежн|спутник|орбита|мирн)/i;
+function centroid(r){ let a=0,o=0; const n=r.length-1||1; for(let i=0;i<n;i++){ a+=r[i][0]; o+=r[i][1]; } return [a/n,o/n]; }
+const inPoly=(g,a,o)=>a>=g.bb[0]&&a<=g.bb[2]&&o>=g.bb[1]&&o<=g.bb[3]&&pip(a,o,g.ring);
+function makeOutskirts(vills, polys){
+  const res=polys.filter(g=>g.key==='residential'), fields=polys.filter(g=>g.key==='farmland'||g.key==='meadow');
+  if (!res.length || !fields.length) return [];
+  const out=[];
+  for (const v of vills){
+    if (!v.name || SOVIET_NAME.test(v.name)) continue;
+    let R=res.find(g=>inPoly(g,v.lat,v.lon));
+    if (!R){ let bd=400; for (const g of res){ const c=centroid(g.ring), d=dist(v.lat,v.lon,c[0],c[1]); if (d<bd){ bd=d; R=g; } } }
+    if (!R || R.ring.length>3000) continue;
+    const C=centroid(R.ring), kx=111000*Math.cos(C[0]*Math.PI/180), cand=[];
+    for (let i=0;i<R.ring.length-1;i++){
+      const a=R.ring[i], b=R.ring[i+1], n=Math.max(1,Math.round(dist(a[0],a[1],b[0],b[1])/120));
+      for (let k=0;k<n;k++){
+        const f=k/n, sp=[a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f];
+        const dy=(sp[0]-C[0])*111000, dx=(sp[1]-C[1])*kx, l=Math.hypot(dx,dy)||1;
+        const q=[sp[0]+dy/l*180/111000, sp[1]+dx/l*180/kx];
+        if (res.some(g=>inPoly(g,q[0],q[1]))) continue;
+        const F=fields.find(g=>inPoly(g,q[0],q[1])); if (!F) continue;
+        cand.push({q, key:F.key});
+      }
+    }
+    cand.sort((x,y)=>(x.key==='farmland'?0:1)-(y.key==='farmland'?0:1));
+    const picked=[];
+    for (const c of cand){ if (picked.every(p=>dist(p.q[0],p.q[1],c.q[0],c.q[1])>=300)) picked.push(c); if (picked.length>=3) break; }
+    picked.forEach((c,i)=>out.push({id:'o'+v.id+'_'+i, lat:+c.q[0].toFixed(6), lon:+c.q[1].toFixed(6), kind:'outskirt',
+      village:v.name, vid:v.id, vlat:v.lat, vlon:v.lon, tags:{name:'Окраина: '+v.name}, lu:c.key}));
+  }
+  return out;
+}
+function markProximity(cands, trackPts, roadPts){
+  const gt=new Grid(), gr=new Grid(0.03); trackPts.forEach(p=>gt.add(p)); roadPts.forEach(p=>gr.add(p));
+  for (const c of cands){
+    c.track = gt.near(c.lat,c.lon,150).length>0;
+    const r=gr.near(c.lat,c.lon,1300)[0]; c.roadDist = r ? Math.round(r[1]) : 1301;
+  }
 }
 
 // ---------- Overpass ----------
@@ -1178,15 +1258,28 @@ function cellQuery(s,w,n,e, withLU){
   node["natural"="spring"];
   nwr["ford"="yes"];
   node["highway"="ford"];
+  nwr["amenity"="place_of_worship"];
 );
 out center tags qt;
 `;
-  if (withLU) q += `(
+  if (withLU) q += `node["place"~"^(village|hamlet)$"]->.v;
+way(around.v:700)["landuse"="residential"]->.res;
+(
   way(around.c:60)["landuse"~"^(farmland|meadow|residential|allotments|forest|farmyard|industrial|quarry|military|orchard|construction|commercial|retail|garages|railway)$"];
   way(around.c:60)["natural"~"^(wood|wetland|water|scrub|grassland|heath|sand)$"];
   way(around.c:60)["leisure"~"^(nature_reserve|park|garden)$"];
+  .res;
+  way(around.res:300)["landuse"~"^(farmland|meadow)$"];
 );
 out geom qt;
+make marker part="tracks"; out;
+way(around.c:150)["highway"="track"]->.tr;
+node(w.tr)(around.c:150);
+out skel qt;
+make marker part="roads"; out;
+way(around.c:1300)["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street)$"]->.rd;
+node(w.rd)(around.c:1300);
+out skel qt;
 `;
   return q;
 }
@@ -1232,6 +1325,39 @@ const VILLAGE_END = /(ово|ево|ёво|ино|ына|ина|ское|цко�
 const NATURE_WORDS = /(болот|лес|бор\b|бор$|роща|поляна|остров|грива|согра|дача|овраг|луг|сосняк|ельник|березняк|ольшаник|пустошь|мох|мша)/i;
 const OLD_WORDS = /(погост|хутор|починок|выселк|усадьб|слобод|ярмар|кабак|двор|мельниц|сельцо|займищ|скит)/i;
 
+// ---------- названия, списки 1859, тракты ----------
+function normName(x){ return String(x||'').toLowerCase().replace(/[ёѣ]/g,'е').replace(/[іi]/g,'и').replace(/ѳ/g,'ф').replace(/ѵ/g,'и')
+  .replace(/ъ(?=[\s\-]|$)/g,'').replace(/^≈/,'').replace(/^(окраина:|урочище|ур\.|деревня|дер\.|д\.|село|с\.|сельцо|погост|пос\.|п\.)\s*/,'')
+  .replace(/[^а-яa-z0-9\- ]/g,'').replace(/\s+/g,' ').trim(); }
+function lev(a,b){ if(a===b) return 0; const m=a.length,n=b.length; if(!m||!n) return m||n; let p=Array.from({length:n+1},(_,j)=>j);
+  for(let i=1;i<=m;i++){ const q=[i]; for(let j=1;j<=n;j++) q[j]=Math.min(p[j]+1,q[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1)); p=q; } return p[n]; }
+function nameSim(a,b){ a=normName(a); b=normName(b); if(!a||!b) return 0; return 1-lev(a,b)/Math.max(a.length,b.length); }
+let SNM={rows:[], files:[]};
+let ROADS=store.get('mdk_roads_v1', []);
+function snmBonus(row){
+  const parts=[]; let v=0; const h=+row.households||0;
+  if (h>=80){ v+=12; parts.push(h+' дворов'); } else if (h>=40){ v+=8; parts.push(h+' дворов'); } else if (h>=15){ v+=4; parts.push(h+' дворов'); } else if (h) parts.push(h+' дв.');
+  const F=row.flags||{};
+  if (F.church){ v+=8; parts.push('церковь'); } if (F.fair){ v+=10; parts.push('ярмарка'); } if (F.tavern){ v+=8; parts.push('кабак'); }
+  if (F.post){ v+=8; parts.push('почтовая станция'); } if (F.mill){ v+=5; parts.push('мельница'); } if (F.ferry){ v+=6; parts.push('перевоз'); }
+  return [Math.min(25,v), 'По списку 1859 г.: '+(parts.join(', ')||'есть в списке')];
+}
+function buildSnmIndex(){ const idx=new Map(); for (const r of SNM.rows) for (const nm of [r.name, ...(r.alt||[])]){ const k=normName(nm); if(!k) continue; (idx.get(k)||idx.set(k,[]).get(k)).push(r); } return idx; }
+function segDist(lat,lon,a,b){ const kx=111320*Math.cos(lat*Math.PI/180), ky=110574;
+  const ax=(a[1]-lon)*kx, ay=(a[0]-lat)*ky, bx=(b[1]-lon)*kx, by=(b[0]-lat)*ky, dx=bx-ax, dy=by-ay, l2=dx*dx+dy*dy;
+  let t=l2? -(ax*dx+ay*dy)/l2 : 0; t=Math.max(0,Math.min(1,t)); return Math.hypot(ax+t*dx, ay+t*dy); }
+function roadCrossings(){
+  const out=[], segs=[]; ROADS.forEach((r,ri)=>{ for(let i=0;i<r.pts.length-1;i++) segs.push([ri,r.pts[i],r.pts[i+1]]); });
+  for (let i=0;i<segs.length;i++) for (let j=i+1;j<segs.length;j++){
+    const [ra,p1,p2]=segs[i], [rb,p3,p4]=segs[j]; if (ra===rb) continue;
+    const d=(p2[1]-p1[1])*(p4[0]-p3[0])-(p2[0]-p1[0])*(p4[1]-p3[1]); if (!d) continue;
+    const ua=((p4[1]-p3[1])*(p1[0]-p3[0])-(p4[0]-p3[0])*(p1[1]-p3[1]))/d, ub=((p2[1]-p1[1])*(p1[0]-p3[0])-(p2[0]-p1[0])*(p1[1]-p3[1]))/d;
+    if (ua>=0&&ua<=1&&ub>=0&&ub<=1) out.push([p1[0]+ua*(p2[0]-p1[0]), p1[1]+ua*(p2[1]-p1[1])]);
+  }
+  return out;
+}
+let SNM_STATS={matched:0, ambiguous:0};
+
 function scoreAll(){
   const ocrAll = (OCR.points || []).filter(g=>!FALSE_OCR.has(g.id));
   if (!DATA && !MARKS.length && !ocrAll.length){ SCORED=[]; CALIB={n:0,nF:0,nE:0,ok:false}; return; }
@@ -1239,13 +1365,35 @@ function scoreAll(){
   for (const m of MARKS) cands.push({id:'m'+m.id, lat:m.lat, lon:m.lon, kind:'manual', manual:m, tags:{name:m.name}, lu:m.lu, ggc:[]});
   // распознанные генштабовки: подтверждают точку OSM или становятся новой точкой
   const gO=new Grid(); cands.forEach(c=>{ if(c.kind!=='cross') gO.add(c); });
+  const ctx0 = DATA?.ctx || {settl:[]};
+  const gS0=new Grid(); ctx0.settl.forEach(p=>gS0.add(p));
+  const oldVill=new Map(); // id живой деревни -> подпись на старой карте
   for (const g of ocrAll){
+    if (g.kind==='m_name'){
+      if (!g.name || normName(g.name).length<4) continue;
+      const sv=gS0.near(g.lat,g.lon,1500).find(([p])=>nameSim(p.name,g.name)>=0.75);
+      if (sv){ oldVill.set(sv[0].id, g); continue; }
+      const sc=gO.near(g.lat,g.lon,1500).find(([p])=>p.kind!=='outskirt' && nameSim(p.tags?.name||'',g.name)>=0.75);
+      if (sc){ sc[0].ggc.push(g); continue; }
+      const c={id:g.id, lat:g.lat, lon:g.lon, kind:'m_name', tags:{name:'≈'+g.name}, lu:g.lu, ggc:[g], ocr:true}; cands.push(c); gO.add(c); continue;
+    }
     const hit=gO.near(g.lat,g.lon,350)[0];
     if (hit) hit[0].ggc.push(g);
     else { const c={id:g.id, lat:g.lat, lon:g.lon, kind:g.kind, tags:{name:g.name?'≈'+g.name:''}, lu:g.lu, ggc:[g], ocr:true}; cands.push(c); gO.add(c); }
   }
   const ctx = DATA?.ctx || {settl:[],spring:[],ford:[],arch:[]};
-  const gS=new Grid(), gSp=new Grid(), gF=new Grid(), gA=new Grid(), gC=new Grid();
+  const gS=new Grid(), gSp=new Grid(), gF=new Grid(), gA=new Grid(), gC=new Grid(), gW=new Grid();
+  (ctx.worship||[]).forEach(p=>gW.add(p));
+  // списки 1859: однозначные совпадения названий
+  const snmIdx=buildSnmIndex(), nameCount=new Map();
+  if (SNM.rows.length){ for (const p of ctx.settl) { const k=normName(p.name); nameCount.set(k,(nameCount.get(k)||0)+1); }
+    for (const c of cands) if (c.kind!=='outskirt' && !c.ocr){ const k=normName(c.tags?.name); if(k) nameCount.set(k,(nameCount.get(k)||0)+1); } }
+  SNM_STATS={matched:0, ambiguous:0}; const snmSeen=new Set();
+  const snmFor=(nm, lat, lon)=>{ const k=normName(nm); if(!k) return null; const rows=snmIdx.get(k); if(!rows) return null;
+    const withLL=rows.filter(r=>r.lat!=null); if (withLL.length){ const r=withLL.map(r=>[r,dist(lat,lon,r.lat,r.lon)]).sort((a,b)=>a[1]-b[1])[0]; return r[1]<3000?r[0]:null; }
+    if (rows.length===1 && (nameCount.get(k)||0)<=1) return rows[0];
+    if (!snmSeen.has(k)){ snmSeen.add(k); SNM_STATS.ambiguous++; } return null; };
+  const crossings=ROADS.length>1?roadCrossings():[];
   ctx.settl.forEach(p=>gS.add(p)); ctx.spring.forEach(p=>gSp.add(p)); ctx.ford.forEach(p=>gF.add(p)); ctx.arch.forEach(p=>gA.add(p));
   cands.forEach(p=>gC.add(p));
   const out=[];
@@ -1266,9 +1414,18 @@ function scoreAll(){
     if (!c.ocr && c.ggc.length){
       const best=c.ggc.find(g=>g.kind==='g_vanished')||c.ggc.find(g=>g.kind==='g_ur')||c.ggc[0];
       const v=best.kind==='g_vanished'?12:best.kind==='g_ur'?8:6;
-      R(v,'Подтверждено генштабом: «'+best.label+'»','ggc:'+best.kind);
+      if (best.kind==='m_name') R(12,'Есть на старой карте: «'+best.name+'»','oldMap');
+      else R(v,(best.kind.startsWith('g_')&&best.label?'Подтверждено старой картой: «'+best.label+'»':'Подтверждено генштабом'),'ggc:'+best.kind);
     }
-    if (c.kind!=='manual' && !c.ocr && name){
+    if (c.kind==='outskirt'){
+      const vid=c.vid;
+      if (gW.near(c.vlat,c.vlon,600).length) R(8,'В селе есть храм — село старое','oldChurch');
+      if (vid && oldVill.has(vid)) R(8,'Село есть на старой карте','oldMap');
+      const row=snmFor(c.village,c.vlat,c.vlon); if (row){ const [v,txt]=snmBonus(row); R(v,txt,'snm'); SNM_STATS.matched++; }
+    } else if (SNM.rows.length && /^(locality|vanished|manual|m_name|g_vanished|g_ur|g_pustosh|g_inn|g_post|g_fair)$/.test(c.kind)){
+      const row=snmFor(name,c.lat,c.lon); if (row){ const [v,txt]=snmBonus(row); R(v,txt,'snm'); SNM_STATS.matched++; }
+    }
+    if (c.kind!=='manual' && c.kind!=='outskirt' && !c.ocr && name){
       if (OLD_WORDS.test(name) && !['mill','manor','inn'].includes(c.kind)) R(12,'Название: «'+name+'»','name:old');
       else if (c.kind==='locality' && NATURE_WORDS.test(name)) R(-10,'Название похоже на природное урочище','name:nature');
       else if ((c.kind==='locality'||c.kind==='vanished') && VILLAGE_END.test(name.trim().split(/\s+/).pop())) R(10,'Название похоже на деревню','name:village');
@@ -1282,8 +1439,19 @@ function scoreAll(){
     if (nk.length) R(nk.length*7,'Рядом: '+nk.map(k=>TYPES[k].label.toLowerCase()).join(', '),'cluster',nk.length);
     if (gF.near(c.lat,c.lon,500).length) R(8,'Брод рядом','ford');
     if (gSp.near(c.lat,c.lon,300).length) R(5,'Родник рядом','spring');
-    if (nearLive && nearLive[1]<350 && c.kind!=='vanished' && c.kind!=='g_vanished') R(-20,'Вплотную к живой деревне ('+(nearLive[0].name||'')+')','nearLive');
-    else if (DATA && (!nearLive || nearLive[1]>2000)) R(5,'Далеко от жилья','farLive');
+    if (c.glade) R(8,'Поляна в лесу','glade');
+    if (c.track) R(4,'К месту ведёт полевая дорога','track');
+    if (c.roadDist!=null && c.kind!=='outskirt'){ if (c.roadDist>1200) R(5,'Далеко от проезжих дорог (меньше выбито)','farRoad'); else if (c.roadDist<150) R(-3,'У самой дороги (чаще выбито)','nearRoad'); }
+    if (ROADS.length){
+      const xd=crossings.find(x=>dist(c.lat,c.lon,x[0],x[1])<400);
+      if (xd) R(10,'Перекрёсток старых дорог','tractX');
+      else { let best=null; for (const r of ROADS) for (let i=0;i<r.pts.length-1;i++){ const d=segDist(c.lat,c.lon,r.pts[i],r.pts[i+1]); if (d<300 && (!best||d<best[0])) best=[d,r.name]; }
+        if (best) R(6,'У старого тракта'+(best[1]?' «'+best[1]+'»':''),'tract'); }
+    }
+    if (c.kind!=='outskirt'){
+      if (nearLive && nearLive[1]<350 && c.kind!=='vanished' && c.kind!=='g_vanished') R(-20,'Вплотную к живой деревне ('+(nearLive[0].name||'')+')','nearLive');
+      else if (DATA && (!nearLive || nearLive[1]>2000)) R(5,'Далеко от жилья','farLive');
+    }
     if (nearBig) R(-15,'Рядом город','nearBig');
     let forbid=null;
     if (t.heritage) forbid='Объект культурного наследия';
@@ -1316,7 +1484,8 @@ function keyName(k){
   if (a==='ggc') return 'Подтверждено генштабом';
   return ({'now:no':'Места сейчас нет','now:yes':'Деревня жива','name:old':'Старинное название','name:nature':'Природное название',
     'name:village':'Название как у деревни',desc:'Описание «бывш.»',date:'Старая дата',reserve:'ООПТ',cluster:'Скопление признаков (за каждый)',
-    ford:'Брод рядом',spring:'Родник рядом',nearLive:'Вплотную к живой деревне',farLive:'Далеко от жилья',nearBig:'Город рядом'})[k]||k;
+    ford:'Брод рядом',spring:'Родник рядом',nearLive:'Вплотную к живой деревне',farLive:'Далеко от жилья',nearBig:'Город рядом', glade:'Поляна в лесу', track:'Полевая дорога к месту', farRoad:'Далеко от проезжих дорог', nearRoad:'У самой дороги',
+    tract:'У старого тракта', tractX:'Перекрёсток старых дорог', snm:'По списку 1859 г.', oldChurch:'Храм в старом селе', oldMap:'Есть на старой карте'})[k]||k;
 }
 function fitCalib(items){
   const lab=items.filter(p=>STATUS[p.id]==='found'||STATUS[p.id]==='empty');
@@ -1407,7 +1576,7 @@ async function showCheckpointHint(){
 }
 function buildData(ck, partial){
   return {params:ck.params, ts:Date.now(), partial, cands:ck.cands,
-    ctx:{settl:ck.settl, spring:ck.spring, ford:ck.ford, arch:ck.arch}};
+    ctx:{settl:ck.settl, spring:ck.spring, ford:ck.ford, arch:ck.arch, worship:ck.worship||[]}};
 }
 async function runAnalysis(){
   const lat=+$('#cLat').value, lon=+$('#cLon').value, rKm=Math.max(1,Math.min(250,+$('#radius').value||100));
@@ -1415,17 +1584,17 @@ async function runAnalysis(){
   let ck=await loadCheckpoint();
   let resumed=false;
   if (ck && ckKey(ck.params)===ckKey(params) && ck.done.length<ck.cells.length) resumed=true;
-  else ck={params, cells:cellsFor(lat,lon,rKm), done:[], cands:[], settl:[], spring:[], ford:[], arch:[], started:Date.now()};
+  else ck={params, cells:cellsFor(lat,lon,rKm), done:[], cands:[], settl:[], spring:[], ford:[], arch:[], worship:[], started:Date.now()};
   const cells=ck.cells, doneSet=new Set(ck.done);
   const candMap=new Map(ck.cands.map(c=>[c.id,c]));
-  const ctx={settl:new Map(ck.settl.map(p=>[p.id,p])), spring:new Map(ck.spring.map(p=>[p.id,p])), ford:new Map(ck.ford.map(p=>[p.id,p])), arch:new Map(ck.arch.map(p=>[p.id,p]))};
+  const ctx={settl:new Map(ck.settl.map(p=>[p.id,p])), spring:new Map(ck.spring.map(p=>[p.id,p])), ford:new Map(ck.ford.map(p=>[p.id,p])), arch:new Map(ck.arch.map(p=>[p.id,p])), worship:new Map((ck.worship||[]).map(p=>[p.id,p]))};
   abortCtl=new AbortController();
   $('#run').disabled=true; $('#stop').disabled=false; $('#restart').style.display='none';
   keepAwake(true);
   const t0=Date.now(), startDone=doneSet.size;
   let failed=new Set(), saving=Promise.resolve();
   const snapshot=()=>{ ck.done=[...doneSet]; ck.cands=[...candMap.values()];
-    ck.settl=[...ctx.settl.values()]; ck.spring=[...ctx.spring.values()]; ck.ford=[...ctx.ford.values()]; ck.arch=[...ctx.arch.values()]; return ck; };
+    ck.settl=[...ctx.settl.values()]; ck.spring=[...ctx.spring.values()]; ck.ford=[...ctx.ford.values()]; ck.arch=[...ctx.arch.values()]; ck.worship=[...ctx.worship.values()]; return ck; };
   const progress=()=>{
     const d=doneSet.size, n=cells.length, el=(Date.now()-t0)/1000, rate=(d-startDone)/Math.max(el,1), eta=rate>0?(n-d)/rate:0;
     $('#prog').style.width=(100*d/n)+'%';
@@ -1438,8 +1607,11 @@ async function runAnalysis(){
     const [s,w,n,e]=cells[i];
     await waitVisible(abortCtl.signal);
     const j=await overpass(cellQuery(s,w,n,e,withLU), abortCtl.signal, wi);
-    const els=j.elements||[], localC=[];
+    const els=j.elements||[], localC=[], trackPts=[], roadPts=[], liveVill=[];
+    let part=null;
     for (const el of els){
+      if (el.type==='marker'){ part=el.tags?.part||null; continue; }
+      if (part){ if (el.type==='node') (part==='tracks'?trackPts:roadPts).push({lat:el.lat,lon:el.lon}); continue; }
       if (el.geometry) continue;
       const t=el.tags||{}; const la=el.lat ?? el.center?.lat, lo=el.lon ?? el.center?.lon;
       if (la==null) continue;
@@ -1448,11 +1620,19 @@ async function runAnalysis(){
       const kind=classify(t);
       if (kind==='arch'){ ctx.arch.set(id,{id,lat:la,lon:lo,name:t.name||''}); continue; }
       if (kind){ if (!candMap.has(id)){ const c={id, lat:+la.toFixed(6), lon:+lo.toFixed(6), kind, tags:pickTags(t)}; candMap.set(id,c); localC.push(c); } continue; }
-      if (isLiveSettlement(t)) ctx.settl.set(id,{id,lat:la,lon:lo,name:t.name||'',big:/^(city|town)$/.test(t.place)});
+      if (isLiveSettlement(t)){ const v={id,lat:la,lon:lo,name:t.name||'',big:/^(city|town)$/.test(t.place),place:t.place}; ctx.settl.set(id,v); if (/^(village|hamlet)$/.test(t.place)) liveVill.push(v); }
+      else if (t.amenity==='place_of_worship') ctx.worship.set(id,{id,lat:la,lon:lo,name:t.name||''});
       else if (t.natural==='spring') ctx.spring.set(id,{id,lat:la,lon:lo});
       else if (t.ford==='yes'||t.highway==='ford') ctx.ford.set(id,{id,lat:la,lon:lo});
     }
-    if (withLU) classifyLanduse(localC, polysFromElements(els));
+    if (withLU){
+      const polys=polysFromElements(els);
+      classifyLanduse(localC, polys);
+      markProximity(localC, trackPts, roadPts);
+      for (const o of makeOutskirts(liveVill, polys)){
+        if (!candMap.has(o.id) && dist(lat,lon,o.lat,o.lon)<=rKm*1000){ classifyLanduse([o], polys); candMap.set(o.id,o); }
+      }
+    }
     doneSet.add(i); failed.delete(i);
     saving=saving.then(()=>saveCheckpoint(snapshot()));
   }
@@ -1502,6 +1682,18 @@ const OV_DEF = {
   soviet:['https://tiles.nakarte.me/topomapper/{z}/{x}/{y}',{maxNativeZoom:13}]
 };
 let baseLayer=null, ovLayer=null;
+const SITE_BASE = location.protocol==='file:' ? 'https://alganin.github.io/karta/' : '';
+let SHARED=[];
+async function loadShared(){
+  try{
+    const r=await fetch(SITE_BASE+'maps.json',{cache:'no-cache'}); if(!r.ok) throw 0;
+    const j=await r.json(); SHARED=(j.maps||[]).filter(m=>m.url&&m.bounds);
+  }catch(e){ SHARED=[]; }
+  $('#sharedGroup').innerHTML=SHARED.map(m=>`<option value="shared:${m.id}">${esc(m.title)}${m.year&&!String(m.title).includes(m.year)?' ('+esc(m.year)+')':''}</option>`).join('');
+  $('#sharedInfo').innerHTML=(SHARED.length?`Общих старых карт: ${SHARED.length}. `:'Общих старых карт пока нет. ')+
+    `Добавить карту для всех: загрузи лист и файл привязки в <a href="https://github.com/Alganin/karta/tree/main/maps-src" target="_blank" rel="noopener">папку maps-src на GitHub</a>, через 5–30 минут она появится в этом списке.`;
+  const ov=store.get('mdk_ov',''); if (ov && ov.startsWith('shared:') && SHARED.some(m=>'shared:'+m.id===ov)){ $('#overlay').value=ov; setOverlay(ov); }
+}
 function setBase(k){ if(baseLayer) map.removeLayer(baseLayer); if(!BASES[k]) k='street'; baseLayer=BASES[k]; baseLayer.addTo(map); baseLayer.bringToBack(); store.set('mdk_base',k); }
 function setOverlay(k){
   if (ovLayer){ map.removeLayer(ovLayer); ovLayer=null; }
@@ -1509,6 +1701,12 @@ function setOverlay(k){
   let url, opt;
   if (k==='custom'){ url=$('#customUrl').value.trim(); if(!url) return; opt={tms:$('#customTms').checked, maxNativeZoom:17}; store.set('mdk_custom',{url,tms:opt.tms}); }
   else if (OV_DEF[k]) [url,opt]=OV_DEF[k];
+  else if (k.startsWith('shared:')){
+    const m=SHARED.find(x=>'shared:'+x.id===k); if(!m){ store.set('mdk_ov',''); return; }
+    const b=L.latLngBounds(m.bounds);
+    url=SITE_BASE+m.url; opt={maxNativeZoom:m.maxzoom, minNativeZoom:m.minzoom, bounds:b.pad(0.02)};
+    if (!map.getBounds().intersects(b)) map.fitBounds(b);
+  }
   else { store.set('mdk_ov',''); return; }
   ovLayer=L.tileLayer(url,{...opt, maxZoom:19, subdomains:'abc', opacity:+$('#ovOpacity').value/100, zIndex:5, attribution:'nakarte.me'}).addTo(map);
   store.set('mdk_ov',k);
@@ -1574,7 +1772,7 @@ function popupHtml(p){
 const byId = new Map();
 function popupOpts(){ const mob=innerWidth<=800; return {maxWidth:mob?Math.min(320,innerWidth-40):330, maxHeight:mob?Math.round(innerHeight*0.55):null, autoPanPaddingTopLeft:[10,mob?115:60], autoPanPaddingBottomRight:[10,20]}; }
 function render(){
-  renderCalib(); renderFalse(); if (typeof renderNear==='function' && geoPos) renderNear();
+  renderCalib(); renderFalse(); if (typeof snmInfo==='function' && SNM.rows.length) snmInfo(); if (typeof renderNear==='function' && geoPos) renderNear();
   const list=filtered();
   markerLayer.clearLayers(); byId.clear();
   if ($('#showMarkers').checked){
@@ -1971,7 +2169,7 @@ $('#base').onchange=e=>setBase(e.target.value);
 $('#overlay').onchange=e=>setOverlay(e.target.value);
 $('#customApply').onclick=()=>setOverlay('custom');
 $('#ovOpacity').oninput=e=>ovLayer?.setOpacity(e.target.value/100);
-$('#scanFiles').onchange=e=>{ if(e.target.files.length) loadScan(e.target.files); };
+$('#scanFiles').onchange=async e=>{ if(!e.target.files.length) return; const fs=[...e.target.files]; await loadScan(fs); const img=fs.find(f=>/^image\//.test(f.type)||/\.(jpe?g|png|gif|webp|bmp)$/i.test(f.name)); if (img && scan) rememberScan(img); };
 $('#scanOpacity').oninput=e=>{ if(scan){ scan.setOpacity(e.target.value/100); if(gcpOpacity!=null) gcpOpacity=e.target.value/100; } };
 $('#scanEdit').onclick=()=>toggleHandles(!scanHandles.length);
 $('#scanFit').onclick=()=>scan&&map.fitBounds(scan.bounds());
@@ -1997,7 +2195,7 @@ map.on('popupopen', e=>{
 // marks
 $('#mType').innerHTML=Object.entries(MARK_TYPES).map(([k,v])=>`<option value="${k}">${v[0]}</option>`).join('');
 $('#addMark').onclick=()=>{ pickMode=true; document.body.classList.add('pickmode'); $('#addMark').textContent='Кликни по карте…'; if(innerWidth<=800) $('#side').classList.remove('open'); };
-map.on('click', e=>{ if(gcpMode){ gcpClick(e.latlng); return; } if(!pickMode) return; pickMode=false; document.body.classList.remove('pickmode'); $('#addMark').textContent='＋ Поставить отметку на карте';
+map.on('click', e=>{ if(gcpMode){ gcpClick(e.latlng); return; } if(roadMode){ roadClick(e.latlng); return; } if(!pickMode) return; pickMode=false; document.body.classList.remove('pickmode'); $('#addMark').textContent='＋ Поставить отметку на карте';
   pendingLL=e.latlng; $('#mName').value=''; $('#mNote').value=''; $('#markModal').classList.add('on'); $('#mName').focus(); });
 $('#mCancel').onclick=()=>$('#markModal').classList.remove('on');
 $('#mSave').onclick=async ()=>{
@@ -2006,6 +2204,90 @@ $('#mSave').onclick=async ()=>{
   MARKS.push(m); saveMarks(); refresh();
   m.lu = await landuseAt(m.lat, m.lon); saveMarks(); refresh();
 };
+// ---------- списки населённых мест 1859 ----------
+function parseSnm(text){
+  const lines=text.replace(/^﻿/,'').split(/\r?\n/).filter(l=>l.trim());
+  if (!lines.length) return [];
+  const delim=[';','\t',','].map(d=>[d,(lines[0].match(new RegExp(d==='\t'?'\t':'\\'+d,'g'))||[]).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const split=l=>{ const out=[]; let cur='', q=false; for (const ch of l){ if(ch==='"'){ q=!q; continue; } if(ch===delim&&!q){ out.push(cur); cur=''; } else cur+=ch; } out.push(cur); return out.map(x=>x.trim()); };
+  const head=split(lines[0]).map(h=>h.toLowerCase());
+  const col=re=>head.findIndex(h=>re.test(h));
+  let iName=col(/назв|name|пункт|селени/), iU=col(/уезд|стан/), iH=col(/двор/), iP=col(/жит|душ|людей|насел/), iLat=col(/широт|^lat/), iLon=col(/долгот|^lon|^lng/);
+  let start=1; if (iName<0){ iName=0; start=0; }
+  const rows=[];
+  for (const l of lines.slice(start)){
+    const f=split(l), raw=f[iName]||''; if (!raw) continue;
+    const m=raw.match(/^([^(]+)(?:\(([^)]+)\))?/); const name=(m?m[1]:raw).trim(), alt=m&&m[2]?m[2].split(/[,;]/).map(x=>x.trim()).filter(Boolean):[];
+    const all=f.join(' ').toLowerCase();
+    const num=i=>i>=0?parseInt(String(f[i]).replace(/\D/g,''))||0:0;
+    const lat=iLat>=0?parseFloat(String(f[iLat]).replace(',','.')):NaN, lon=iLon>=0?parseFloat(String(f[iLon]).replace(',','.')):NaN;
+    rows.push({name, alt, uezd:iU>=0?f[iU]:'', households:num(iH), people:num(iP),
+      lat:isNaN(lat)?null:lat, lon:isNaN(lon)?null:lon,
+      flags:{church:/церк|храм|приход|собор/.test(all), fair:/ярмар|торж|базар/.test(all), tavern:/кабак|питейн|корчм|трактир|постоял|харчев/.test(all),
+        post:/почт|ямск|\bям\b/.test(all), mill:/мельн/.test(all), ferry:/перевоз|паром/.test(all)}});
+  }
+  return rows;
+}
+function snmInfo(){
+  if (!SNM.rows.length){ $('#snmInfo').textContent='Таблица не загружена.'; return; }
+  $('#snmInfo').textContent=`Загружено строк: ${SNM.rows.length}. Совпало с точками и сёлами: ${SNM_STATS.matched}. Пропущено из-за одинаковых названий: ${SNM_STATS.ambiguous}`+
+    (SNM_STATS.ambiguous?' — добавь в таблицу колонки «широта» и «долгота» для этих сёл.':'.');
+}
+$('#snmFile').onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  let txt=await f.text(); if (/�/.test(txt.slice(0,2000))){ try{ txt=new TextDecoder('windows-1251').decode(await f.arrayBuffer()); }catch(err){} }
+  const rows=parseSnm(txt); if (!rows.length){ alertBox('В таблице не нашлось строк с названиями.'); return; }
+  SNM={rows, files:[f.name]}; await idb.set('snm',SNM); refresh(); snmInfo(); alertBox('Загружено строк: '+rows.length); };
+$('#snmClear').onclick=async()=>{ SNM={rows:[],files:[]}; await idb.set('snm',SNM); refresh(); snmInfo(); };
+$('#snmTpl').onclick=()=>download('spisok-1859-shablon.csv','﻿название;уезд;дворов;жителей;заведения;широта;долгота\n'+
+  'Никольское (Вязовка);Нижегородский;86;612;церковь, ярмарка, питейный дом;;\nПетрово;Нижегородский;23;170;;;\nБолдино;Лукояновский;120;980;церковь, базар, почтовая станция;55.0;45.3\n','text/csv');
+
+// ---------- старые дороги и тракты ----------
+const roadsLayer=L.layerGroup().addTo(map);
+let roadMode=false, roadPts=[], roadTmp=null;
+function saveRoads(){ store.set('mdk_roads_v1', ROADS); }
+function renderRoads(){
+  roadsLayer.clearLayers();
+  ROADS.forEach((r,i)=>L.polyline(r.pts,{color:'#7a4b1c',weight:3,dashArray:'8 6',opacity:.85}).bindTooltip(r.name||'Старая дорога').addTo(roadsLayer));
+  $('#roadsList').innerHTML = ROADS.map((r,i)=>`<div class="item" style="cursor:default"><div style="flex:1"><div class="t">${esc(r.name||'Без названия')}</div><div class="d">${r.pts.length} точек</div></div><button class="btn small" data-roaddel="${i}">×</button></div>`).join('');
+}
+function setRoadMode(on){
+  roadMode=on; roadPts=[]; if (roadTmp){ map.removeLayer(roadTmp); roadTmp=null; }
+  document.body.classList.toggle('pickmode',on);
+  $('#roadDraw').textContent=on?'Закончить':'Нарисовать дорогу';
+  $('#roadCancel').style.display=on?'':'none'; $('#roadName').style.display=on?'':'none';
+  if (on){ $('#roadName').value=''; alertBox('Кликай по карте вдоль старой дороги. Потом «Закончить».'); if(innerWidth<=800) $('#side').classList.remove('open'); }
+}
+$('#roadDraw').onclick=()=>{
+  if (!roadMode){ setRoadMode(true); return; }
+  if (roadPts.length>=2){ ROADS.push({id:Date.now(), name:$('#roadName').value.trim(), pts:roadPts.map(p=>[+p[0].toFixed(6),+p[1].toFixed(6)])}); saveRoads(); bumpChanges(); }
+  else alertBox('Нужно хотя бы две точки.');
+  setRoadMode(false); renderRoads(); refresh();
+};
+$('#roadCancel').onclick=()=>setRoadMode(false);
+$('#roadsList').addEventListener('click',e=>{ const b=e.target.closest('[data-roaddel]'); if(!b) return; ROADS.splice(+b.dataset.roaddel,1); saveRoads(); renderRoads(); refresh(); });
+function roadClick(ll){ roadPts.push([ll.lat,ll.lng]); if(roadTmp) roadTmp.setLatLngs(roadPts); else roadTmp=L.polyline(roadPts,{color:'#7a4b1c',weight:3,dashArray:'4 4'}).addTo(map); }
+
+// ---------- свои сканы в браузере ----------
+async function scansList(){ return (await idb.get('scans'))||[]; }
+async function rememberScan(file){
+  const list=await scansList(), key='mdk_scan_'+file.name+'_'+file.size;
+  if (!list.some(x=>x.key===key)){ list.push({key, name:file.name, size:file.size, type:file.type||'image/jpeg', added:Date.now()});
+    const ok=await idb.set('scanblob:'+key, file); if (ok) await idb.set('scans', list); }
+  renderScans();
+}
+async function renderScans(){
+  const list=await scansList();
+  $('#myScans').innerHTML = list.length ? '<div class="lbl" style="margin-top:6px">Мои сканы (хранятся в этом браузере)</div>'+list.map(x=>`<div class="item" style="cursor:default"><div style="flex:1"><div class="t">${esc(x.name)}</div><div class="d">${(x.size/1e6).toFixed(1)} МБ${store.get(x.key,null)?' · привязан':''}</div></div>
+    <button class="btn small" data-scanshow="${esc(x.key)}">Показать</button><button class="btn small" data-scandel="${esc(x.key)}">×</button></div>`).join('') : '';
+}
+$('#myScans').addEventListener('click',async e=>{
+  const s=e.target.closest('[data-scanshow]'), d=e.target.closest('[data-scandel]');
+  if (s){ const key=s.dataset.scanshow, meta=(await scansList()).find(x=>x.key===key), blob=await idb.get('scanblob:'+key);
+    if (!blob){ alertBox('Файл скана не найден, загрузи его заново.'); return; }
+    loadScan([new File([blob], meta.name, {type:meta.type})]); }
+  if (d){ const key=d.dataset.scandel; const list=(await scansList()).filter(x=>x.key!==key); await idb.set('scans',list); await idb.set('scanblob:'+key,null); renderScans(); }
+});
+
 // ---------- ложные пометки ----------
 function renderFalse(){
   const n=FALSE_OCR.size;
@@ -2118,7 +2400,7 @@ $('#projSave').onclick=()=>{
   const withPh=$('#projPhotos').checked;
   const scans={}; try{ for (let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(k.startsWith('mdk_scan_')) scans[k]=store.get(k,null); } }catch(e){}
   const proj={format:'poisk-project', version:1, created:new Date().toISOString(),
-    analysis:DATA, marks:MARKS, status:STATUS, ocr:OCR, falseOcr:[...FALSE_OCR], pers:PERS,
+    analysis:DATA, marks:MARKS, status:STATUS, ocr:OCR, falseOcr:[...FALSE_OCR], pers:PERS, roads:ROADS, snm:SNM,
     journal: withPh ? JOURNAL : JOURNAL.map(v=>({...v, photos:[]})), scans,
     settings:{base:store.get('mdk_base','street'), ov:store.get('mdk_ov',''), custom:store.get('mdk_custom',null), calibOn:$('#calibOn').checked}};
   const d=new Date(), stamp=d.toISOString().slice(0,10);
@@ -2140,6 +2422,8 @@ $('#projOpen').onchange=async e=>{
   if (j.pers){ let k=0; for (const [id,v] of Object.entries(j.pers)){ const o=PERS[id]; if(!o || (v.ts||0)>(o.ts||0)){ PERS[id]=v; k++; } } savePers(); if(k) rep.push(`избранное/описания ${k}`); }
   if (j.ocr?.points){ const ids=new Set(OCR.points.map(p=>p.id)); let k=0; for (const p of j.ocr.points) if(!ids.has(p.id)){ OCR.points.push(p); k++; }
     OCR.files.push(...(j.ocr.files||[])); await idb.set('ocr',OCR); if(k) rep.push(`распознанных пометок ${k}`); }
+  if (j.roads){ const ids=new Set(ROADS.map(r=>r.id)); let k=0; for (const r of j.roads) if(!ids.has(r.id)){ ROADS.push(r); k++; } saveRoads(); renderRoads(); if(k) rep.push(`дорог ${k}`); }
+  if (j.snm?.rows?.length && !SNM.rows.length){ SNM=j.snm; await idb.set('snm',SNM); rep.push(`список 1859 (${SNM.rows.length} строк)`); }
   if (j.falseOcr){ j.falseOcr.forEach(x=>FALSE_OCR.add(x)); store.set('mdk_false_v1',[...FALSE_OCR]); }
   if (j.journal){ const ids=new Map(JOURNAL.map(v=>[v.id,v])); let k=0;
     for (const v of j.journal){ const old=ids.get(v.id); if(!old){ JOURNAL.push(v); k++; } else if(!old.photos?.length && v.photos?.length) old.photos=v.photos; }
@@ -2195,7 +2479,8 @@ $('#nearPanel').addEventListener('click',e=>{
 // ---------- init ----------
 { let b0=store.get('mdk_base','street'); if(!BASES[b0]) b0='street'; setBase(b0); $('#base').value=b0; }
 const cu=store.get('mdk_custom',null); if(cu){ $('#customUrl').value=cu.url; $('#customTms').checked=cu.tms; }
-const ov0=store.get('mdk_ov',''); if(ov0){ $('#overlay').value=ov0; setOverlay(ov0); }
+const ov0=store.get('mdk_ov',''); if(ov0 && !ov0.startsWith('shared:')){ $('#overlay').value=ov0; setOverlay(ov0); }
+loadShared();
 function showDataLog(){ if (!DATA) return; const p=DATA.params; $('#cLat').value=p.lat; $('#cLon').value=p.lon; $('#radius').value=p.rKm; updateCircle();
   log(`Загружен сохранённый анализ от ${new Date(DATA.ts).toLocaleString('ru-RU')}: ${DATA.cands.length} мест`+(DATA.partial?' (неполный)':'')+'. Можно запустить заново.'); }
 $('#calibOn').checked=store.get('mdk_calib_on',true);
@@ -2206,11 +2491,12 @@ updateCircle(); refresh(); projInfo();
   else if (DATA && !a){ if (await idb.set('analysis',DATA)) try{ localStorage.removeItem('mdk_analysis_v1'); }catch(e){} }
   const o=await idb.get('ocr'); if (o&&o.points) OCR=o;
   const j=await idb.get('journal'); if (Array.isArray(j)) JOURNAL=j;
-  showDataLog(); refresh(); renderJournal(); ocrInfo(); await showCheckpointHint();
+  const sn=await idb.get('snm'); if (sn&&sn.rows) SNM=sn;
+  showDataLog(); refresh(); renderJournal(); ocrInfo(); snmInfo(); renderRoads(); renderScans(); await showCheckpointHint();
   if (DATA || MARKS.length || OCR.points.length) switchTab('points');
   ocrLanduse();
 })();
-window.__test = {scoreAll, classify, cellsFor, parseOziMap, parseKml, applyScanModel, refresh, map, get SCORED(){return SCORED;}, get scan(){return scan;}, get CALIB(){return CALIB;}, setStatus(o){ STATUS=o; store.set('mdk_status_v1',STATUS); refresh(); }, get JOURNAL(){return JOURNAL;}, get FALSE(){return FALSE_OCR;}, get DATA(){return DATA;}, get PERS(){return PERS;}};
+window.__test = {scoreAll, classify, cellsFor, parseOziMap, parseKml, applyScanModel, refresh, map, get SCORED(){return SCORED;}, get scan(){return scan;}, get CALIB(){return CALIB;}, setStatus(o){ STATUS=o; store.set('mdk_status_v1',STATUS); refresh(); }, get JOURNAL(){return JOURNAL;}, get FALSE(){return FALSE_OCR;}, get DATA(){return DATA;}, get PERS(){return PERS;}, get SNM_STATS(){return SNM_STATS;}, get ROADS(){return ROADS;}};
 </script>
 </body>
 </html>
